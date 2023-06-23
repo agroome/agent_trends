@@ -98,7 +98,7 @@ def main():
     date_count = agent_df[['date', 'uuid']].groupby('date').count()
 
     width = 1000
-    line = stats.hvplot(x='date', y='total_agents', width=width)
+    line = stats.hvplot(x='date', y=['total_agents'], width=width)
     bars = stats.hvplot.bar(x='date', y=['new_agents', 'unlinked_agents'], width=width)
 
     # width = 900
@@ -118,4 +118,5 @@ def main():
     # layout = hv.Layout(line + bars).opts(opts.Layout(shared_axes=False))
 
 
-
+if __name__ == '__main__':
+    main()
