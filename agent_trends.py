@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 from tenable.io import TenableIO
 
 load_dotenv()
-hv.extension('bokeh')
+# hv.extension('bokeh')
+pn.extension()
 
 data_folder = Path('./data')
 
@@ -53,11 +54,15 @@ def download_agents(
     return df
 
 
+# def read_csv_files(data_root='./data', glob='*/agents.csv'):
+#     '''Read all csv files in data_root that match glob and return a cominded dataframe'''
+#     df = pd.concat([pd.read_csv(file) for file in Path(data_root).glob(glob)])
+#     df['date'] = df['date'].map(pd.to_datetime)
+#     return df.sort_values(by='date')
+
 def read_csv_files(data_root='./data', glob='*/agents.csv'):
-    '''Read all csv files in data_root that match glob and return a cominded dataframe'''
-    df = pd.concat([pd.read_csv(file) for file in Path(data_root).glob(glob)])
-    df['date'] = df['date'].map(pd.to_datetime)
-    return df.sort_values(by='date')
+    return pd.concat([pd.read_csv(file) for file in Path(data_root).glob(glob)])
+
 
 
 def analyze_day(df, day):
@@ -87,31 +92,70 @@ def analyze_day(df, day):
     return output_record
     
     
-
 def main():
-    df = read_csv_files()
 
-    stats = pd.DataFrame.from_records([analyze_day(df, day) for day in df['date'].unique()])
-
-    agent_df = read_csv_files(glob='*/agents.csv')
+    # agent_df = read_csv_files(glob='*/agents.csv')
+    agent_df = read_csv_files()
+    agent_df['date'] = agent_df['date'].map(pd.to_datetime)
+    agent_df = agent_df.sort_values(by='date')
+    print(f'loaded {len(agent_df)} agent records')
 
     date_count = agent_df[['date', 'uuid']].groupby('date').count()
+    print(f'date_count: {len(date_count)}')
 
-    width = 1000
-    line = stats.hvplot(x='date', y=['total_agents'], width=width)
-    bars = stats.hvplot.bar(x='date', y=['new_agents', 'unlinked_agents'], width=width)
+    stats = pd.DataFrame.from_records([analyze_day(agent_df, day) for day in agent_df['date'].unique()])
+    print(f'computed stats for {len(stats)} days')
+
+    # stats = pd.DataFrame.from_records([analyze_day(df, day) for day in df['date'].unique()])
+    # print(f'computed stats for {len(stats)} days')
+
+
+    row = pn.Row(stats)
+    row.servable()
+    # width = 1000
+    # line = stats.hvplot(x='date', y='total_agents', width=width)
+    # bars = stats.hvplot.bar(x='date', y=['new_agents', 'unlinked_agents'], width=width)
+    
+    # output = pn.Column(
+    #     pn.Row(line, styles={'background': '#dfdfed'}), 
+    #     pn.Row(bars, styles={'background': '#dfdfed'}), 
+    #     styles={'background':'#222222'}, width=1000
+    # )
+    
+    # output.servable()
+
+
+def main_old():
+
+    agent_df = read_csv_files(glob='*/agents.csv')
+    print(f'loaded {len(agent_df)} agent records')
+
+    date_count = agent_df[['date', 'uuid']].groupby('date').count()
+    print(f'date_count: {len(date_count)}')
+
+    stats = pd.DataFrame.from_records([analyze_day(agent_df, day) for day in agent_df['date'].unique()])
+    print(f'computed stats for {len(stats)} days')
+
+    # width = 1000
+    # line = stats.hvplot(x='date', y='total_agents', width=width)
+    # bars = stats.hvplot.bar(x='date', y=['new_agents', 'unlinked_agents'], width=width)
 
     # width = 900
     # line = hv.Curve(date_count, x='date', y='uuid', width=width)
     # bars = stats.hvplot.bar(x='date', y=['new_agents', 'unlinked_agents'], width=width)
+    # bars.servable()
+    width = 900
+    line = hv.Curve(date_count, x='date', y='uuid', width=width)
+    bars = stats.hvplot.bar(x='date', y=['new_agents', 'unlinked_agents'], width=width)
 
-    output = pn.Column(
+    pn.Column(
         pn.Row(line, styles={'background': '#dfdfed'}), 
         pn.Row(bars, styles={'background': '#dfdfed'}), 
         styles={'background':'#222222'}, width=1000
     ).servable()
 
     # output.show()
+    
 
     # from holoviews import opts
 
