@@ -1,19 +1,12 @@
 import pandas as pd
 import panel as pn
 from datetime import datetime, timedelta
-from uuid import uuid4
 from typing import List, Union, Optional
 from pathlib import Path
-import hvplot.pandas
-import holoviews as hv
 from dotenv import load_dotenv
 from tenable.io import TenableIO
 
 load_dotenv()
-# hv.extension('bokeh')
-pn.extension()
-
-data_folder = Path('./data')
 
 
 def download_agents(

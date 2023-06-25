@@ -57,7 +57,7 @@ def write_csv_files(agent_df, day_parameters, data_folder):
     print(f'day_df has {day_df.shape} on {today.date()}')
     
     for day, params in enumerate(day_parameters):
-        the_date = (today + timedelta(days=day)).date()
+        the_date = (today - timedelta(days=day)).date()
         
         day_df = next_day(day_df, **params)
         day_df['date'] = [the_date for i in range(len(day_df))]

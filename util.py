@@ -2,26 +2,20 @@ import re
 import pandas as pd
 import panel as pn
 from datetime import datetime, timedelta
-from uuid import uuid4
 from typing import List, Union, Optional
 from pathlib import Path
-import hvplot.pandas
-import holoviews as hv
-from dotenv import load_dotenv
 from tenable.io import TenableIO
+from bars import create_bars
 
-load_dotenv()
-# hv.extension('bokeh')
-pn.extension()
-
-data_folder = Path('./data')
+import warnings
+warnings.filterwarnings("ignore", module="bokeh")
 
 
 def download_agents(
         tio: TenableIO, 
         data_folder: Union[str, Path], 
-        date_str: Optional[str] = None,
-        columns: Optional[List[str]] = None
+        columns: Optional[List[str]] = None,
+        save_csv: bool = True
         ) -> pd.DataFrame:
     '''Download and clean agent records from Tenable.io.
 
@@ -35,24 +29,30 @@ def download_agents(
     Args:
         tio: TenableIO object
         data_folder: folder that will contains the date folders, created if not found
-        date_str: name of folder inside data_dir, must be YYY-MM-DD format 
         columns: list of columns to keep in the dataframe
+        save_csv: if True, save the dataframe to a csv to file_path
     
     '''
-
+    # download agent data from Tenable.io
     df = pd.json_normalize(tio.agents.list())
     date_columns = ['last_scanned', 'linked_on', 'last_connect']
+    # convert unix timestamps to datetime
     df[date_columns] = df[date_columns].apply(pd.to_datetime, unit='s')
 
-    # compute path and create folder(s) if necessary
-    if date_str is None:
-        date_str = str(datetime.now().date())
-    date_folder = Path(data_folder) / date_str
-    date_folder.mkdir(exist_ok=True, parents=True)
+    # keep only the columns we want
+    if columns is not None:
+        df = df[columns]
 
-    df.to_csv(date_folder / f'agents.csv', index=False)
-    print(f'agents saved to saved to {date_folder}/agents.csv')
-    return date_str, df
+    if save_csv:
+        # compose path and create folder(s) including parent if necessary
+        file_path = str(datetime.now().date())
+        date_folder = Path(data_folder) / file_path
+        file_path = date_folder / f'agents.csv'
+        date_folder.mkdir(exist_ok=True, parents=True)
+        df.to_csv(file_path, index=False)
+        print(f'agents saved to saved to {file_path}')
+
+    return file_path, df
 
 
 def compare_dates(data_folder: Union[Path, str], current_date: str, previous_date: Optional[str] = None, ):
@@ -97,7 +97,7 @@ def compare_dates(data_folder: Union[Path, str], current_date: str, previous_dat
 
 
 
-def compute_daily_statistics(data_folder, recompute_all=False):
+def compute_daily_statistics(data_folder: Union[str,Path], recompute_all: bool = False, save_image:bool = False):
     '''compute statistics for the most recent date in data_folder. if recompute all is True recompute for all dates'''
 
     unsorted_folders = [p.name for p in Path(data_folder).glob('*') if not p.name.startswith('.')]
@@ -105,7 +105,7 @@ def compute_daily_statistics(data_folder, recompute_all=False):
         print(f'no date folders found in {data_folder}')
         return
     
-    # convert to datetime to sort
+    # convert to datetime to sort folder names in data_folder
     dates = sorted([pd.to_datetime(date).date() for date in unsorted_folders if bool(re.match(r'\d{4}-\d{2}-\d{2}', date))])
     current_date = str(dates.pop())
     previous_date = str(dates.pop()) if dates else None
@@ -124,52 +124,16 @@ def compute_daily_statistics(data_folder, recompute_all=False):
         stats = compare_dates('./data', current_date, previous_date)
         current_folder = data_folder / current_date
         pd.DataFrame.from_records([stats]).to_csv(current_folder / 'stats.csv', index=False)
-        
-        print(f'compare dates: {current_date} - {previous_date}')
-        print(stats)
-        
         current_date = previous_date
 
     # combine all stats files into one
     stats = pd.concat([pd.read_csv(file, parse_dates=['date']) for file in data_folder.glob('*/stats.csv')])
     stats = stats.sort_values(by='date')
-    stats.to_csv(data_folder / 'stats.csv', index=False)
+    stats_file = data_folder / 'stats.csv'
+    stats.to_csv(stats_file, index=False)
+    print(f'statistics saved to {stats_file}')
 
-
-def present_agent_stats(data_path: str, data_file: Optional[str] = 'stats.csv') -> pn.Column:
-    '''present agent statistics in a panel dashboard with a line chart and a bar chart
-    
-    Args: 
-        data_path: path to folder folder containing the summary stat
-        data_file: name of the file containing the summary stats
-
-    Returns:
-        a panel column containing the charts
-
-    Raises:
-        FileNotFoundError: if the data file is not found
-    '''
-
-    stat_path = Path(data_path) / data_file
-    if not stat_path.exists():
-        raise FileNotFoundError(f'{stat_path} not found')
-
-    stats = pd.read_csv(stat_path, parse_dates=['date'])
-    print(f'reading stats from {stat_path.name} for {len(stats)} days')
-
-    width = 1000    
-    line = stats.hvplot(x='date', y='total_agents', width=width)
-    bars = stats.hvplot.bar(x='date', y=['new_agents', 'unlinked_agents'], width=width)
-    
-    output = pn.Column(
-        pn.Row(line, styles={'background': '#dfdfed'}), 
-        pn.Row(bars, styles={'background': '#dfdfed'}), 
-        styles={'background':'#222222'}, width=1000
-    )
-    
-    return output
-
-
-
-
-# present_data('./data')
+    if save_image and not recompute_all:
+        chart = create_bars(stats_file)
+        chart.save(save_path=current_folder, filename='stats.png')
+        print(f'statistics chart saved to {current_folder}/stats.png')

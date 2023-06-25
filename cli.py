@@ -6,10 +6,12 @@ from datetime import datetime
 from pathlib import Path
 from tenable.io import TenableIO
 from dotenv import load_dotenv
-from util import download_agents, compute_daily_statistics, present_agent_stats
+from util import download_agents, compute_daily_statistics
 from generate_data import generate_test_data
 
 import panel as pn
+
+DEFAULT_DATA_FOLDER = './data'
 
 load_dotenv()
 
@@ -19,16 +21,16 @@ def cli():
     pass
 
 @cli.command()
-@click.option('--data-folder', default='./data', help='base folder for data defaults to ./data')
+@click.option('--data-folder', default=DEFAULT_DATA_FOLDER, 
+              help=f'defaults download location is {DEFAULT_DATA_FOLDER}')
 def daily_download(data_folder: str):
     '''Download agents from Tenable.io and write to a folder for the current day.
 
     The folder structure is as follows: ./<data_folder>/<date>/agents.csv
      '''
-
     tio = TenableIO()
     click.echo(f'Downloading agents from Tenable.io')
-    download_agents(tio, data_folder, date_str=str(datetime.now().date()))
+    download_agents(tio, data_folder)
     click.echo(f'Computing summary statistics')
     compute_daily_statistics(data_folder)
     click.echo(f'Completed')
@@ -66,15 +68,25 @@ def generate_example_data(data_folder: Path, source_file: str):
 
 
 @cli.command()
-def serve():
+@click.option('--data-folder', type=click.Path(), default=DEFAULT_DATA_FOLDER, 
+              help=f'base folder for daily folders, defaults to {DEFAULT_DATA_FOLDER}')
+def chart(data_folder):
     '''serve the dashboard'''
-    command = ["panel", "serve", "test.py", "--show"]
-    command = "panel serve test.py --show"
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    output, errors = process.communicate()
+    from bars import create_bars
+    from functools import partial
 
-    print("Output:", output.decode())
-    print("Errors:", errors.decode())
+    data_file = Path(data_folder) / 'stats.csv'
+    chart = create_bars(data_file)
+
+    pn.serve({'/app': chart}, show=True)
+
+    # command = ["panel", "serve", "bars.py", "--show"]
+    # command = "panel serve bars.py --show"
+    # process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    # output, errors = process.communicate()
+
+    # print("Output:", output.decode())
+    # print("Errors:", errors.decode())
 
     # click.echo(f"Output: {output.decode()}")
     # click.echo(f"Errors: {errors.decode()}")
